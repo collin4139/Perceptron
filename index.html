@@ -3,56 +3,68 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Perceptron Classifier</title>
-    <script defer src="https://pyscript.net/latest/pyscript.js"></script>
+    <title>Perceptron Image Classifier</title>
+    <script type="module">
+        import { loadPyodide } from "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.mjs";
+
+        async function main() {
+            window.pyodide = await loadPyodide();
+            await pyodide.loadPackage(["numpy", "pillow", "scikit-learn"]);
+
+            // Load and prepare the model
+            await pyodide.runPythonAsync(`
+                import joblib
+                import numpy as np
+                from PIL import Image
+                from js import fetch
+
+                async def load_model():
+                    response = await fetch("perceptron_model.pkl")
+                    model_data = await response.arrayBuffer()
+                    with open("perceptron_model.pkl", "wb") as f:
+                        f.write(model_data)
+
+                    global model
+                    model = joblib.load("perceptron_model.pkl")
+
+                await load_model()
+
+                def classify_image(img_bytes):
+                    img = Image.open(img_bytes).convert("L")  
+                    img = img.resize((20, 20))  
+                    img = np.array(img, dtype=np.float32).flatten()  
+                    img = img.reshape(1, -1)
+                    prediction = model.predict(img)
+                    return "L" if prediction[0] == 0 else "T"
+            `);
+        }
+        main();
+
+        async function classify() {
+            let inputElement = document.getElementById("imageInput");
+            let file = inputElement.files[0];
+
+            if (!file) {
+                alert("Please upload an image!");
+                return;
+            }
+
+            let reader = new FileReader();
+            reader.readAsArrayBuffer(file);
+            reader.onloadend = async function() {
+                let result = await pyodide.runPythonAsync(`
+                    classify_image(${reader.result})
+                `);
+
+                document.getElementById("result").innerText = "Prediction: " + result;
+            };
+        }
+    </script>
 </head>
 <body>
-    <h2>Upload an Image to Classify</h2>
-    <input type="file" id="upload" accept="image/*">
-    <button py-click="classify_image">Classify</button>
-    <p id="result"></p>
-
-    <script type="py">
-        import pickle
-        import numpy as np
-        from PIL import Image
-
-        # Load the trained model
-        with open("perceptron_model.pkl", "rb") as f:
-            model = pickle.load(f)
-
-        def preprocess_image(img):
-            img = img.convert("L").resize((20, 20))
-            return np.array(img, dtype=np.float32).flatten().reshape(1, -1)
-
-        def classify_image():
-            file_input = document.getElementById("upload")
-            file = file_input.files[0]
-            if not file:
-                document.getElementById("result").textContent = "Please upload an image."
-                return
-
-            reader = FileReader()
-            reader.onload = lambda e: process_file(e.target.result)
-            reader.readAsDataURL(file)
-
-        def process_file(data_url):
-            from js import Image as JsImage
-            from js import document, Uint8Array
-            import io
-            import base64
-
-            # Convert data URL to image
-            base64_data = data_url.split(",")[1]
-            img_bytes = base64.b64decode(base64_data)
-            img = Image.open(io.BytesIO(img_bytes))
-
-            # Preprocess & classify
-            X = preprocess_image(img)
-            prediction = model.predict(X)[0]
-            label = "L" if prediction == 0 else "T"
-            document.getElementById("result").textContent = f"Predicted: {label}"
-
-    </script>
+    <h2>Perceptron Image Classifier</h2>
+    <input type="file" id="imageInput">
+    <button onclick="classify()">Classify</button>
+    <p id="result">Prediction: </p>
 </body>
 </html>
