@@ -2,20 +2,49 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Perceptron Classifier</title>
-    <script defer src="https://pyscript.net/alpha/pyscript.js"></script>
+    <title>L and T Classifier</title>
+    <script defer src="https://pyscript.net/latest/pyscript.js"></script>
 </head>
 <body>
-    <h1>Perceptron Image Classifier</h1>
-
-    <label for="imageInput">Upload Image:</label>
-    <input type="file" id="imageInput" accept="image/png, image/jpeg">
-    
-    <button py-click="classify_image">Classify</button>
-    
+    <h1>L and T Image Classifier</h1>
+    <input type="file" id="imageUpload" accept="image/*">
+    <button id="classifyButton">Classify Image</button>
     <p id="result"></p>
 
-    <py-script src="pyscript_app.py"></py-script>
+    <py-script>
+        import pickle
+        import numpy as np
+        from pyodide import create_proxy
+        from js import document, FileReader
+        from PIL import Image
+
+        # Load the trained model
+        with open("model.pkl", "rb") as model_file:
+            model = pickle.load(model_file)
+
+        def classify_image(event):
+            file = document.getElementById("imageUpload").files[0]
+            if not file:
+                document.getElementById("result").innerText = "Please upload an image."
+                return
+
+            reader = FileReader()
+
+            def on_load(e):
+                img = Image.open(e.target.result).convert("L")  # Convert to grayscale
+                img = img.resize((28, 28))  # Resize image
+                img_array = np.array(img).flatten().reshape(1, -1)  # Flatten and reshape
+
+                # Predict class
+                prediction = model.predict(img_array)
+                result = "L" if prediction[0] == 0 else "T"
+                document.getElementById("result").innerText = f"Predicted: {result}"
+
+            reader.onload = create_proxy(on_load)
+            reader.readAsDataURL(file)
+
+        classify_proxy = create_proxy(classify_image)
+        document.getElementById("classifyButton").addEventListener("click", classify_proxy)
+    </py-script>
 </body>
 </html>

@@ -1,36 +1,35 @@
 import os
 import numpy as np
-import cv2
 import pickle
+from PIL import Image
 from sklearn.linear_model import Perceptron
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
 
-def load_data():
-    X, y = [], []
-    
-    for label, folder in enumerate(["L", "T"]):
-        path = f"dataset/{folder}"
-        for file in os.listdir(path):
-            img = cv2.imread(os.path.join(path, file), cv2.IMREAD_GRAYSCALE)
-            img = img.flatten() / 255.0  # Normalize
-            X.append(img)
-            y.append(label)
+# Function to load and preprocess images
+def load_images_from_folder(folder, label):
+    images = []
+    labels = []
+    for filename in os.listdir(folder):
+        img_path = os.path.join(folder, filename)
+        img = Image.open(img_path).convert('L')  # Convert to grayscale
+        img = img.resize((28, 28))  # Resize to match the model input size
+        images.append(np.array(img).flatten())  # Flatten image to 1D
+        labels.append(label)  # 0 for 'L', 1 for 'T'
+    return images, labels
 
-    return np.array(X), np.array(y)
+# Load images and labels
+l_images, l_labels = load_images_from_folder("L_images", 0)
+t_images, t_labels = load_images_from_folder("T_images", 1)
 
-# Load and split dataset
-X, y = load_data()
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+# Combine data
+X = np.array(l_images + t_images)
+y = np.array(l_labels + t_labels)
 
-# Train perceptron model
+# Train the perceptron model
 model = Perceptron()
-model.fit(X_train, y_train)
+model.fit(X, y)
 
-# Save model
-with open("model.pkl", "wb") as f:
-    pickle.dump(model, f)
+# Save the trained model
+with open("model.pkl", "wb") as model_file:
+    pickle.dump(model, model_file)
 
-# Test accuracy
-y_pred = model.predict(X_test)
-print(f"Model Accuracy: {accuracy_score(y_test, y_pred) * 100:.2f}%")
+print("Model trained and saved as model.pkl")
